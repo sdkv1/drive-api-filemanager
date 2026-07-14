@@ -6,14 +6,18 @@
       "use": "@vercel/node"
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/drive/(.*)",
-      "destination": "/server.js"
+      "src": "/drive/(.*)",
+      "dest": "server.js"
     },
     {
-      "source": "/(.*)",
-      "destination": "/server.js"
+      "src": "/api/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
     }
   ]
 }
