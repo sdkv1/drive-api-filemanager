@@ -16,7 +16,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  const port = process.env.PORT || 8080;
+  app.listen(port, () => console.log(`Server running on port ${port}`));
+}
 
+// Export for Vercel serverless
 module.exports = app;
