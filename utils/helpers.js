@@ -4,6 +4,8 @@ const ROOT_FOLDER_NAME = "Blockchain";
 
 // Helper list files dengan support shared drive
 async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared, ownedByMe, driveId)') {
+  if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
+
   const res = await drive.files.list({
     q,
     fields,
@@ -17,6 +19,8 @@ async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared,
 
 // Cari atau buat root folder
 async function getOrCreateRootFolder() {
+  if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
+
   const files = await listFiles(
     `name = '${ROOT_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
   );
@@ -33,6 +37,8 @@ async function getOrCreateRootFolder() {
 
 // Rekursif baca struktur folder
 async function readAll(folderId) {
+  if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
+
   const files = await listFiles(`'${folderId}' in parents and trashed = false`);
 
   return await Promise.all(files.map(async (file) => {
@@ -57,6 +63,8 @@ async function readAll(folderId) {
 
 // Info storage
 async function getStorageInfo() {
+  if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
+
   const res = await drive.about.get({ fields: 'storageQuota' });
   return res.data.storageQuota;
 }
