@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drive File Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <i class="fas fa-cloud"></i>
+        <span>Drive Manager</span>
+      </div>
+      <nav class="nav-menu">
+        <a href="#" class="nav-item active" onclick="app.navigate('home')">
+          <i class="fas fa-home"></i> Beranda
+        </a>
+        <a href="#" class="nav-item" onclick="app.navigate('shared')">
+          <i class="fas fa-share-alt"></i> Shared
+        </a>
+        <a href="#" class="nav-item" onclick="app.showStorage()">
+          <i class="fas fa-chart-pie"></i> Storage
+        </a>
+      </nav>
+      <div class="storage-bar">
+        <div class="storage-info">
+          <span id="storage-used">0 GB</span> / <span id="storage-total">Unlimited</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="storage-progress"></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="header">
+        <div class="breadcrumb" id="breadcrumb">
+          <span class="bc-root" onclick="app.loadFolder('root')">Blockchain</span>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="app.showCreateModal()">
+            <i class="fas fa-plus"></i> Baru
+          </button>
+          <button class="btn btn-refresh" onclick="app.refresh()">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </header>
+
+      <div class="content" id="content">
+        <div class="loading" id="loading">
+          <i class="fas fa-spinner fa-spin"></i> Memuat...
+        </div>
+        <div class="file-grid" id="file-grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal" id="create-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Buat Baru</h3>
+        <button class="modal-close" onclick="app.closeModal('create-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="create-options">
+          <button class="create-option" onclick="app.showNewFolderModal()">
+            <i class="fas fa-folder"></i>
+            <span>Folder</span>
+          </button>
+          <button class="create-option" onclick="app.showNewFileModal()">
+            <i class="fas fa-file"></i>
+            <span>File Teks</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="folder-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Folder Baru</h3>
+        <button class="modal-close" onclick="app.closeModal('folder-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="folder-name" placeholder="Nama folder..." class="input">
+        <button class="btn btn-primary btn-full" onclick="app.createFolder()">Buat</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="file-modal">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3>File Baru</h3>
+        <button class="modal-close" onclick="app.closeModal('file-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="file-name" placeholder="Nama file..." class="input">
+        <textarea id="file-content" placeholder="Isi file..." class="textarea"></textarea>
+        <button class="btn btn-primary btn-full" onclick="app.createFile()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="preview-modal">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3 id="preview-title">Preview</h3>
+        <button class="modal-close" onclick="app.closeModal('preview-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre id="preview-content" class="preview-content"></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="storage-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Informasi Storage</h3>
+        <button class="modal-close" onclick="app.closeModal('storage-modal')">&times;</button>
+      </div>
+      <div class="modal-body" id="storage-details"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
