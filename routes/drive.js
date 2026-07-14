@@ -5,6 +5,15 @@ const { getOrCreateRootFolder, readAll, getStorageInfo, listFiles } = require('.
 
 // ─── JSON-RPC POST ───
 router.post('/', async (req, res) => {
+  // Check if drive is initialized
+  if (!drive) {
+    return res.status(500).json({ 
+      jsonrpc: "2.0", 
+      id: req.body.id, 
+      error: "Google Drive API tidak terinisialisasi. Cek GOOGLE_SERVICE_ACCOUNT_KEY_B64." 
+    });
+  }
+
   const { jsonrpc, method, params, id } = req.body;
   if (jsonrpc !== "2.0") {
     return res.status(400).json({ jsonrpc: "2.0", id, error: "Invalid JSON-RPC" });
@@ -55,6 +64,18 @@ router.post('/', async (req, res) => {
 
 // ─── GET: Baca struktur folder ───
 router.get('/', async (req, res) => {
+  // Check if drive is initialized
+  if (!drive) {
+    return res.status(500).json({ 
+      status: "error",
+      message: "Google Drive API tidak terinisialisasi. Cek GOOGLE_SERVICE_ACCOUNT_KEY_B64.",
+      env_check: {
+        has_key: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64,
+        key_length: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64 ? process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64.length : 0
+      }
+    });
+  }
+
   try {
     const rootId = await getOrCreateRootFolder();
     const storage = await getStorageInfo();
@@ -72,12 +93,19 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     console.error("[ERROR] GET /drive:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ status: "error", error: err.message });
   }
 });
 
 // ─── GET: List folder shared (debug) ───
 router.get('/shared', async (req, res) => {
+  if (!drive) {
+    return res.status(500).json({ 
+      status: "error", 
+      message: "Google Drive API tidak terinisialisasi." 
+    });
+  }
+
   try {
     const shared = await listFiles(`sharedWithMe = true and trashed = false`);
     res.json({
@@ -85,7 +113,7 @@ router.get('/shared', async (req, res) => {
       sharedFolders: shared.filter(f => f.mimeType === 'application/vnd.google-apps.folder')
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ status: "error", error: err.message });
   }
 });
 
