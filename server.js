@@ -16,6 +16,23 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Test koneksi tanpa Google Auth
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Server berjalan!',
+    env_check: {
+      has_key: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64,
+      key_length: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64 ? process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64.length : 0
+    }
+  });
+});
+
 // For local development
 if (process.env.NODE_ENV !== 'production') {
   const port = process.env.PORT || 8080;
