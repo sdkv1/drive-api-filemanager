@@ -26,8 +26,12 @@ try {
   console.log("[INFO] Google Drive API initialized successfully");
 } catch (e) {
   console.error("[ERROR] Gagal init Google Drive:", e.message);
-  // Create dummy drive object untuk prevent crash
   drive = null;
 }
 
-module.exports = { drive, auth };
+// Mode: 'shared' = shared drive, 'personal' = folder di akun pribadi
+const DRIVE_MODE = process.env.DRIVE_MODE || 'personal';
+// Kalau personal, pakai folder ID yang di-share ke service account
+const SHARED_FOLDER_ID = process.env.SHARED_FOLDER_ID || null;
+
+module.exports = { drive, auth, DRIVE_MODE, SHARED_FOLDER_ID };
