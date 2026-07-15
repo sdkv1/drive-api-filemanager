@@ -33,5 +33,7 @@ try {
 const DRIVE_MODE = process.env.DRIVE_MODE || 'personal';
 // Kalau personal, pakai folder ID yang di-share ke service account
 const SHARED_FOLDER_ID = process.env.SHARED_FOLDER_ID || null;
+// Auto detect semua folder yang di-share ke service account
+const DETECT_ALL_SHARED = process.env.DETECT_ALL_SHARED === 'true';
 
-module.exports = { drive, auth, DRIVE_MODE, SHARED_FOLDER_ID };
+module.exports = { drive, auth, DRIVE_MODE, SHARED_FOLDER_ID, DETECT_ALL_SHARED };
