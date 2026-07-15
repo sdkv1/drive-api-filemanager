@@ -44,7 +44,6 @@ const app = {
     this.currentMode = 'folder';
     this.selectedFolderId = folderId;
     try {
-      // Fetch folder contents via API
       const res = await fetch(`${this.apiBase}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -139,6 +138,7 @@ const app = {
           <div class="file-name">${file.name}</div>
           ${file.source ? `<div class="file-source">${file.source === 'shared' ? '🔹 Shared' : '👤 Owned'}</div>` : ''}
           <div class="file-actions" onclick="event.stopPropagation()">
+            ${isFolder ? `<button class="action-btn view" onclick="app.showPermissionModal('${file.id}', '${file.name}')" title="Share"><i class="fas fa-share-alt"></i></button>` : ''}
             ${!isFolder ? `<button class="action-btn view" onclick="app.previewFile('${file.id}', '${file.name}', '${file.mimeType}')" title="Lihat"><i class="fas fa-eye"></i></button>` : ''}
             <button class="action-btn" onclick="app.deleteFile('${file.id}', '${file.name}')" title="Hapus"><i class="fas fa-trash"></i></button>
           </div>
@@ -189,10 +189,105 @@ const app = {
         <div class="file-source">${folder.source === 'shared' ? '🔹 Shared' : '👤 Owned'}</div>
         <div class="file-meta">${folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('id-ID') : ''}</div>
         <div class="file-actions" onclick="event.stopPropagation()">
+          <button class="action-btn view" onclick="app.showPermissionModal('${folder.id}', '${folder.name}')" title="Share"><i class="fas fa-share-alt"></i></button>
           <button class="action-btn" onclick="app.deleteFile('${folder.id}', '${folder.name}')" title="Hapus"><i class="fas fa-trash"></i></button>
         </div>
       </div>
     `;
+  },
+
+  async showPermissionModal(fileId, fileName) {
+    this.selectedFileId = fileId;
+    document.getElementById('permission-file-name').textContent = fileName;
+
+    // Load existing permissions
+    try {
+      const res = await fetch(`${this.apiBase}/permission/${fileId}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.permissions) {
+        this.renderPermissions(data.permissions);
+      }
+    } catch (err) {
+      console.error('Error loading permissions:', err);
+      document.getElementById('permission-list').innerHTML = '<p>Gagal memuat permissions</p>';
+    }
+
+    this.showModal('permission-modal');
+  },
+
+  renderPermissions(permissions) {
+    const list = document.getElementById('permission-list');
+    if (!permissions || permissions.length === 0) {
+      list.innerHTML = '<p style="color:var(--text-muted)">Belum ada sharing</p>';
+      return;
+    }
+
+    list.innerHTML = permissions.map(p => `
+      <div class="permission-item">
+        <div class="permission-info">
+          <span class="permission-email">${p.emailAddress || p.displayName || 'Unknown'}</span>
+          <span class="permission-role">${p.role}</span>
+        </div>
+        <button class="action-btn" onclick="app.deletePermission('${p.id}')" title="Hapus"><i class="fas fa-trash"></i></button>
+      </div>
+    `).join('');
+  },
+
+  async addPermission() {
+    const email = document.getElementById('permission-email').value.trim();
+    const role = document.getElementById('permission-role').value;
+
+    if (!email) return this.showToast('Email wajib diisi', 'error');
+    if (!this.selectedFileId) return this.showToast('Pilih file/folder dulu', 'error');
+
+    try {
+      const res = await fetch(`${this.apiBase}/permission`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId: this.selectedFileId,
+          email: email,
+          role: role
+        })
+      });
+
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.showToast('Permission ditambahkan', 'success');
+        document.getElementById('permission-email').value = '';
+        // Refresh permission list
+        this.showPermissionModal(this.selectedFileId, document.getElementById('permission-file-name').textContent);
+      } else {
+        this.showToast(data.error || 'Gagal menambahkan permission', 'error');
+      }
+    } catch (err) {
+      this.showToast('Gagal menambahkan permission', 'error');
+    }
+  },
+
+  async deletePermission(permissionId) {
+    if (!confirm('Hapus permission ini?')) return;
+
+    try {
+      const res = await fetch(`${this.apiBase}/permission`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId: this.selectedFileId,
+          permissionId: permissionId
+        })
+      });
+
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.showToast('Permission dihapus', 'success');
+        this.showPermissionModal(this.selectedFileId, document.getElementById('permission-file-name').textContent);
+      } else {
+        this.showToast(data.error || 'Gagal menghapus permission', 'error');
+      }
+    } catch (err) {
+      this.showToast('Gagal menghapus permission', 'error');
+    }
   },
 
   updateStorage(storage) {
@@ -234,7 +329,6 @@ const app = {
     }
 
     try {
-      // Fetch file content via API
       const res = await fetch(`${this.apiBase}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -303,7 +397,6 @@ const app = {
 
     if (!name) return this.showToast('Nama file wajib diisi', 'error');
 
-    // Tentukan parent folder
     const parentId = this.selectedFolderId || (this.allFolders[0] ? this.allFolders[0].id : null);
     if (!parentId) {
       this.showToast('Tidak ada folder tujuan. Aktifkan DETECT_ALL_SHARED atau set SHARED_FOLDER_ID.', 'error');
