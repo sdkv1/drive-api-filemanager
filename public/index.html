@@ -9,6 +9,7 @@
 </head>
 <body>
   <div class="app">
+    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo">
         <i class="fas fa-cloud"></i>
@@ -35,10 +36,12 @@
       </div>
     </aside>
 
+    <!-- Main Content -->
     <main class="main">
+      <!-- Header -->
       <header class="header">
         <div class="breadcrumb" id="breadcrumb">
-          <span class="bc-root" onclick="app.loadFolder('root')">Blockchain</span>
+          <span class="bc-root" onclick="app.loadRoot()">Blockchain</span>
         </div>
         <div class="header-actions">
           <button class="btn btn-primary" onclick="app.showCreateModal()">
@@ -50,6 +53,7 @@
         </div>
       </header>
 
+      <!-- Content -->
       <div class="content" id="content">
         <div class="loading" id="loading">
           <i class="fas fa-spinner fa-spin"></i> Memuat...
@@ -59,6 +63,7 @@
     </main>
   </div>
 
+  <!-- Create Modal -->
   <div class="modal" id="create-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -80,6 +85,7 @@
     </div>
   </div>
 
+  <!-- New Folder Modal -->
   <div class="modal" id="folder-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -93,6 +99,7 @@
     </div>
   </div>
 
+  <!-- New File Modal -->
   <div class="modal" id="file-modal">
     <div class="modal-content modal-large">
       <div class="modal-header">
@@ -107,6 +114,7 @@
     </div>
   </div>
 
+  <!-- File Preview Modal -->
   <div class="modal" id="preview-modal">
     <div class="modal-content modal-large">
       <div class="modal-header">
@@ -119,6 +127,35 @@
     </div>
   </div>
 
+  <!-- Permission Modal -->
+  <div class="modal" id="permission-modal">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3>Share: <span id="permission-file-name">File</span></h3>
+        <button class="modal-close" onclick="app.closeModal('permission-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="permission-form">
+          <input type="email" id="permission-email" placeholder="Email..." class="input">
+          <select id="permission-role" class="input">
+            <option value="reader">Viewer (Baca)</option>
+            <option value="commenter">Commenter</option>
+            <option value="writer">Editor</option>
+          </select>
+          <button class="btn btn-primary btn-full" onclick="app.addPermission()">
+            <i class="fas fa-share-alt"></i> Share
+          </button>
+        </div>
+        <div class="permission-divider"></div>
+        <h4>Shared With</h4>
+        <div id="permission-list" class="permission-list">
+          <p style="color:var(--text-muted)">Memuat...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Storage Modal -->
   <div class="modal" id="storage-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -129,6 +166,7 @@
     </div>
   </div>
 
+  <!-- Toast -->
   <div class="toast" id="toast"></div>
 
   <script src="js/app.js"></script>
