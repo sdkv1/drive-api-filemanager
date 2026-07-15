@@ -3,7 +3,8 @@ const app = {
   folderStack: [],
   apiBase: '/drive',
   allFolders: [],
-  currentMode: 'root', // 'root' | 'all-shared' | 'folder'
+  currentMode: 'root',
+  selectedFolderId: null,
 
   init() {
     this.loadRoot();
@@ -12,6 +13,7 @@ const app = {
   async loadRoot() {
     this.showLoading(true);
     this.currentMode = 'root';
+    this.selectedFolderId = null;
     try {
       const res = await fetch(`${this.apiBase}`);
       const data = await res.json();
@@ -21,8 +23,8 @@ const app = {
         this.folderStack = [];
         this.renderBreadcrumb();
 
-        // Kalau mode detect_all_shared, tampilkan semua folder
         if (data.mode === 'detect_all_shared') {
+          this.allFolders = data.data;
           this.renderAllSharedFolders(data.data);
         } else {
           this.renderFiles(data.data);
@@ -37,38 +39,12 @@ const app = {
     this.showLoading(false);
   },
 
-  async loadFolder(folderId) {
+  async loadFolder(folderId, folderName) {
     this.showLoading(true);
     this.currentMode = 'folder';
+    this.selectedFolderId = folderId;
     try {
-      const res = await fetch(`${this.apiBase}`);
-      const data = await res.json();
-
-      if (data.status === 'success') {
-        this.currentFolder = folderId;
-        this.renderBreadcrumb();
-
-        // Cari folder di data
-        const folder = this.findFolderInTree(data.data, folderId);
-        if (folder && folder.children) {
-          this.renderFiles(folder.children);
-        } else {
-          // Kalau tidak ketemu, fetch ulang
-          await this.fetchFolderContents(folderId);
-        }
-
-        this.updateStorage(data.storage);
-      }
-    } catch (err) {
-      this.showToast('Gagal memuat folder', 'error');
-      console.error(err);
-    }
-    this.showLoading(false);
-  },
-
-  async fetchFolderContents(folderId) {
-    try {
-      // Gunakan JSON-RPC untuk list folder contents
+      // Fetch folder contents via API
       const res = await fetch(`${this.apiBase}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,11 +58,17 @@ const app = {
 
       const data = await res.json();
       if (data.result) {
+        this.folderStack.push({ id: folderId, name: folderName });
+        this.renderBreadcrumb();
         this.renderFiles(data.result);
+      } else if (data.error) {
+        this.showToast(data.error, 'error');
       }
     } catch (err) {
-      console.error('Error fetching folder:', err);
+      this.showToast('Gagal memuat folder', 'error');
+      console.error(err);
     }
+    this.showLoading(false);
   },
 
   async loadAllShared() {
@@ -112,14 +94,10 @@ const app = {
     const bc = document.getElementById('breadcrumb');
     let html = `<span class="bc-root" onclick="app.loadRoot()">Blockchain</span>`;
 
-    if (this.currentMode === 'all-shared') {
-      html += ` <span class="bc-separator">/</span> <span class="bc-item">Semua Folder</span>`;
-    } else {
-      this.folderStack.forEach((folder, idx) => {
-        html += ` <span class="bc-separator">/</span> `;
-        html += `<span class="bc-item" onclick="app.navigateBack(${idx})">${folder.name}</span>`;
-      });
-    }
+    this.folderStack.forEach((folder, idx) => {
+      html += ` <span class="bc-separator">/</span> `;
+      html += `<span class="bc-item" onclick="app.navigateBack(${idx})">${folder.name}</span>`;
+    });
 
     bc.innerHTML = html;
   },
@@ -136,8 +114,12 @@ const app = {
   navigateBack(index) {
     this.folderStack = this.folderStack.slice(0, index + 1);
     const folder = this.folderStack[index];
-    if (folder) this.loadFolder(folder.id);
-    else this.loadRoot();
+    if (folder) {
+      this.selectedFolderId = folder.id;
+      this.loadFolder(folder.id, folder.name);
+    } else {
+      this.loadRoot();
+    }
   },
 
   renderFiles(files) {
@@ -150,7 +132,7 @@ const app = {
     grid.innerHTML = files.map(file => {
       const isFolder = file.type === 'folder' || file.mimeType === 'application/vnd.google-apps.folder';
       return `
-        <div class="file-card" onclick="${isFolder ? `app.navigateToFolder('${file.id}', '${file.name}')` : `app.previewFile('${file.id}', '${file.name}', '${file.mimeType}')`}">
+        <div class="file-card" onclick="${isFolder ? `app.loadFolder('${file.id}', '${file.name}')` : `app.previewFile('${file.id}', '${file.name}', '${file.mimeType}')`}">
           <div class="file-icon ${isFolder ? 'folder' : (file.mimeType?.startsWith('text/') ? 'text' : 'file')}">
             <i class="fas ${isFolder ? 'fa-folder' : (file.mimeType?.startsWith('text/') ? 'fa-file-alt' : 'fa-file')}"></i>
           </div>
@@ -168,11 +150,15 @@ const app = {
   renderAllSharedFolders(folders) {
     const grid = document.getElementById('file-grid');
     if (!folders || folders.length === 0) {
-      grid.innerHTML = '<div class="loading">Tidak ada folder yang di-share</div>';
+      grid.innerHTML = `
+        <div class="loading">
+          <p>Tidak ada folder yang di-share</p>
+          <p style="font-size:0.8rem;margin-top:8px;">Share folder dari Google Drive ke service account</p>
+        </div>
+      `;
       return;
     }
 
-    // Group by source
     const sharedFolders = folders.filter(f => f.source === 'shared' || f.shared);
     const ownedFolders = folders.filter(f => f.source === 'owned' || f.ownedByMe);
 
@@ -195,7 +181,7 @@ const app = {
 
   renderFolderCard(folder) {
     return `
-      <div class="file-card" onclick="app.navigateToFolder('${folder.id}', '${folder.name}')">
+      <div class="file-card" onclick="app.loadFolder('${folder.id}', '${folder.name}')">
         <div class="file-icon folder">
           <i class="fas fa-folder"></i>
         </div>
@@ -207,22 +193,6 @@ const app = {
         </div>
       </div>
     `;
-  },
-
-  findFolderInTree(files, folderId) {
-    for (const file of files || []) {
-      if (file.id === folderId) return file;
-      if (file.children) {
-        const found = this.findFolderInTree(file.children, folderId);
-        if (found) return found;
-      }
-    }
-    return null;
-  },
-
-  async navigateToFolder(folderId, folderName) {
-    this.folderStack.push({ id: folderId, name: folderName });
-    await this.loadFolder(folderId);
   },
 
   updateStorage(storage) {
@@ -264,12 +234,28 @@ const app = {
     }
 
     try {
-      const res = await fetch(`${this.apiBase}`);
+      // Fetch file content via API
+      const res = await fetch(`${this.apiBase}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "list",
+          params: { parentId: this.selectedFolderId },
+          id: 1
+        })
+      });
+
       const data = await res.json();
-      const file = this.findFileInTree(data.data, fileId);
+      let content = 'Tidak dapat membaca konten';
+
+      if (data.result) {
+        const file = data.result.find(f => f.id === fileId);
+        if (file && file.content) content = file.content;
+      }
 
       document.getElementById('preview-title').textContent = fileName;
-      document.getElementById('preview-content').textContent = file?.content || 'Tidak dapat membaca konten';
+      document.getElementById('preview-content').textContent = content;
       this.showModal('preview-modal');
     } catch (err) {
       this.showToast('Gagal memuat preview', 'error');
@@ -317,6 +303,13 @@ const app = {
 
     if (!name) return this.showToast('Nama file wajib diisi', 'error');
 
+    // Tentukan parent folder
+    const parentId = this.selectedFolderId || (this.allFolders[0] ? this.allFolders[0].id : null);
+    if (!parentId) {
+      this.showToast('Tidak ada folder tujuan. Aktifkan DETECT_ALL_SHARED atau set SHARED_FOLDER_ID.', 'error');
+      return;
+    }
+
     try {
       const res = await fetch(`${this.apiBase}`, {
         method: 'POST',
@@ -324,7 +317,7 @@ const app = {
         body: JSON.stringify({
           jsonrpc: "2.0",
           method: "create",
-          params: { name, content },
+          params: { name, content, parentId },
           id: 1
         })
       });
@@ -364,6 +357,8 @@ const app = {
   refresh() {
     if (this.currentMode === 'all-shared') {
       this.loadAllShared();
+    } else if (this.currentMode === 'folder' && this.selectedFolderId) {
+      this.loadFolder(this.selectedFolderId, this.folderStack[this.folderStack.length - 1]?.name || 'Folder');
     } else {
       this.loadRoot();
     }
