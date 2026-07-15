@@ -48,14 +48,16 @@ router.post('/', async (req, res) => {
         break;
 
       case "create":
+        const parentId = params.parentId || rootId;
+        if (!parentId) {
+          throw new Error("Tidak ada folder parent. Set DETECT_ALL_SHARED=true atau SHARED_FOLDER_ID.");
+        }
         const createData = {
-          resource: { name: params.name, parents: [rootId || params.parentId] },
+          resource: { name: params.name, parents: [parentId] },
           media: { body: params.content || '' },
           fields: 'id, name',
+          supportsAllDrives: true,
         };
-        if (DRIVE_MODE === 'shared') {
-          createData.supportsAllDrives = true;
-        }
         const file = await drive.files.create(createData);
         result = { id: file.data.id, name: file.data.name };
         break;
@@ -63,10 +65,8 @@ router.post('/', async (req, res) => {
       case "delete":
         const deleteData = { 
           fileId: params.id,
+          supportsAllDrives: true,
         };
-        if (DRIVE_MODE === 'shared') {
-          deleteData.supportsAllDrives = true;
-        }
         await drive.files.delete(deleteData);
         result = { success: true };
         break;
@@ -148,11 +148,38 @@ router.get('/shared', async (req, res) => {
   }
 
   try {
-    const shared = await listFiles(`sharedWithMe = true and trashed = false`);
+    console.log("[INFO] Fetching shared items...");
+
+    // Query 1: sharedWithMe
+    let sharedFolders = [];
+    let sharedFiles = [];
+
+    try {
+      const shared = await listFiles(`sharedWithMe = true and trashed = false`);
+      console.log(`[INFO] Found ${shared.length} shared items`);
+
+      sharedFolders = shared.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+      sharedFiles = shared.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+    } catch (e) {
+      console.log("[WARN] Error fetching sharedWithMe:", e.message);
+    }
+
+    // Query 2: Semua folder (termasuk yang di-share)
+    let allFolders = [];
+    try {
+      allFolders = await listFiles(`mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+      console.log(`[INFO] Found ${allFolders.length} total folders`);
+    } catch (e) {
+      console.log("[WARN] Error fetching all folders:", e.message);
+    }
+
     res.json({
       status: "success",
-      total: shared.length,
-      sharedFolders: shared.filter(f => f.mimeType === 'application/vnd.google-apps.folder').map(f => ({
+      total_shared_items: sharedFolders.length + sharedFiles.length,
+      shared_folders_count: sharedFolders.length,
+      shared_files_count: sharedFiles.length,
+      total_all_folders: allFolders.length,
+      sharedFolders: sharedFolders.map(f => ({
         id: f.id,
         name: f.name,
         mimeType: f.mimeType,
@@ -161,13 +188,20 @@ router.get('/shared', async (req, res) => {
         ownedByMe: f.ownedByMe,
         driveId: f.driveId
       })),
-      sharedFiles: shared.filter(f => f.mimeType !== 'application/vnd.google-apps.folder').map(f => ({
+      sharedFiles: sharedFiles.map(f => ({
         id: f.id,
         name: f.name,
         mimeType: f.mimeType
+      })),
+      allFolders: allFolders.map(f => ({
+        id: f.id,
+        name: f.name,
+        ownedByMe: f.ownedByMe,
+        shared: f.shared
       }))
     });
   } catch (err) {
+    console.error("[ERROR] GET /drive/shared:", err.message);
     res.status(500).json({ status: "error", error: err.message });
   }
 });
@@ -198,6 +232,7 @@ router.get('/all-folders', async (req, res) => {
       }))
     });
   } catch (err) {
+    console.error("[ERROR] GET /drive/all-folders:", err.message);
     res.status(500).json({ status: "error", error: err.message });
   }
 });
