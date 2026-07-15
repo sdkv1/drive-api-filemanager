@@ -27,6 +27,7 @@ body {
   height: 100vh;
 }
 
+/* Sidebar */
 .sidebar {
   width: 260px;
   background: var(--bg-light);
@@ -94,6 +95,7 @@ body {
   width: 0%;
 }
 
+/* Main */
 .main {
   flex: 1;
   display: flex;
@@ -168,6 +170,7 @@ body {
 
 .btn-full { width: 100%; justify-content: center; }
 
+/* Content */
 .content {
   flex: 1;
   overflow-y: auto;
@@ -182,6 +185,19 @@ body {
   height: 200px;
   color: var(--text-muted);
   font-size: 1rem;
+}
+
+/* Folder Group */
+.folder-group {
+  margin-bottom: 32px;
+}
+
+.group-title {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
 .file-grid {
@@ -221,6 +237,20 @@ body {
   text-align: center;
   word-break: break-word;
   color: var(--text);
+  margin-bottom: 4px;
+}
+
+.file-source {
+  font-size: 0.75rem;
+  text-align: center;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.file-meta {
+  font-size: 0.7rem;
+  text-align: center;
+  color: var(--text-muted);
 }
 
 .file-actions {
@@ -250,6 +280,7 @@ body {
 .action-btn:hover { background: var(--danger); color: white; }
 .action-btn.view:hover { background: var(--primary); }
 
+/* Modal */
 .modal {
   display: none;
   position: fixed;
@@ -360,6 +391,7 @@ body {
   white-space: pre-wrap;
 }
 
+/* Toast */
 .toast {
   position: fixed;
   bottom: 24px;
@@ -382,11 +414,13 @@ body {
 .toast.success { background: var(--success); }
 .toast.error { background: var(--danger); }
 
+/* Scrollbar */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--bg-lighter); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
 
+/* Responsive */
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .file-grid { grid-template-columns: repeat(2, 1fr); }
