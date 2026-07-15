@@ -24,7 +24,6 @@ router.post('/', async (req, res) => {
 
     switch (method) {
       case "list":
-        // Kalau DETECT_ALL_SHARED, list semua folder yang di-share
         if (DETECT_ALL_SHARED) {
           const allFolders = await detectAllSharedFolders();
           result = allFolders.map(f => ({
@@ -37,7 +36,9 @@ router.post('/', async (req, res) => {
             modifiedTime: f.modifiedTime
           }));
         } else {
-          const files = await listFiles(`'${rootId}' in parents and trashed = false`);
+          const targetId = params.parentId || rootId;
+          if (!targetId) throw new Error("Tidak ada folder tujuan.");
+          const files = await listFiles(`'${targetId}' in parents and trashed = false`);
           result = files.map(f => ({
             id: f.id,
             name: f.name,
@@ -48,7 +49,7 @@ router.post('/', async (req, res) => {
         break;
 
       case "create":
-        const parentId = params.parentId || rootId;
+        const parentId = params.parentId || rootId || SHARED_FOLDER_ID;
         if (!parentId) {
           throw new Error("Tidak ada folder parent. Set DETECT_ALL_SHARED=true atau SHARED_FOLDER_ID.");
         }
@@ -95,7 +96,6 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    // Kalau DETECT_ALL_SHARED, tampilkan semua folder yang di-share
     if (DETECT_ALL_SHARED) {
       const allFolders = await detectAllSharedFolders();
       const storage = await getStorageInfo();
@@ -150,9 +150,9 @@ router.get('/shared', async (req, res) => {
   try {
     console.log("[INFO] Fetching shared items...");
 
-    // Query 1: sharedWithMe
     let sharedFolders = [];
     let sharedFiles = [];
+    let allFolders = [];
 
     try {
       const shared = await listFiles(`sharedWithMe = true and trashed = false`);
@@ -164,8 +164,6 @@ router.get('/shared', async (req, res) => {
       console.log("[WARN] Error fetching sharedWithMe:", e.message);
     }
 
-    // Query 2: Semua folder (termasuk yang di-share)
-    let allFolders = [];
     try {
       allFolders = await listFiles(`mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
       console.log(`[INFO] Found ${allFolders.length} total folders`);
@@ -233,6 +231,97 @@ router.get('/all-folders', async (req, res) => {
     });
   } catch (err) {
     console.error("[ERROR] GET /drive/all-folders:", err.message);
+    res.status(500).json({ status: "error", error: err.message });
+  }
+});
+
+// ─── POST: Share folder ke user (permission) ───
+router.post('/permission', async (req, res) => {
+  if (!drive) {
+    return res.status(500).json({ status: "error", message: "Google Drive API tidak terinisialisasi." });
+  }
+
+  try {
+    const { fileId, email, role = 'reader' } = req.body;
+
+    if (!fileId || !email) {
+      return res.status(400).json({ status: "error", message: "fileId dan email wajib diisi" });
+    }
+
+    const permission = await drive.permissions.create({
+      fileId: fileId,
+      requestBody: {
+        type: 'user',
+        role: role, // 'reader', 'commenter', 'writer', 'owner'
+        emailAddress: email,
+      },
+      sendNotificationEmail: true,
+      supportsAllDrives: true,
+      fields: 'id, role, type, emailAddress'
+    });
+
+    res.json({
+      status: "success",
+      message: `Permission ${role} diberikan ke ${email}`,
+      permission: permission.data
+    });
+  } catch (err) {
+    console.error("[ERROR] POST /drive/permission:", err.message);
+    res.status(500).json({ status: "error", error: err.message });
+  }
+});
+
+// ─── GET: List permissions suatu file/folder ───
+router.get('/permission/:fileId', async (req, res) => {
+  if (!drive) {
+    return res.status(500).json({ status: "error", message: "Google Drive API tidak terinisialisasi." });
+  }
+
+  try {
+    const { fileId } = req.params;
+
+    const permissions = await drive.permissions.list({
+      fileId: fileId,
+      supportsAllDrives: true,
+      fields: 'permissions(id, role, type, emailAddress, displayName)'
+    });
+
+    res.json({
+      status: "success",
+      fileId: fileId,
+      permissions: permissions.data.permissions
+    });
+  } catch (err) {
+    console.error("[ERROR] GET /drive/permission:", err.message);
+    res.status(500).json({ status: "error", error: err.message });
+  }
+});
+
+// ─── DELETE: Hapus permission ───
+router.delete('/permission', async (req, res) => {
+  if (!drive) {
+    return res.status(500).json({ status: "error", message: "Google Drive API tidak terinisialisasi." });
+  }
+
+  try {
+    const { fileId, permissionId } = req.body;
+
+    if (!fileId || !permissionId) {
+      return res.status(400).json({ status: "error", message: "fileId dan permissionId wajib diisi" });
+    }
+
+    await drive.permissions.delete({
+      fileId: fileId,
+      permissionId: permissionId,
+      supportsAllDrives: true,
+    });
+
+    res.json({
+      status: "success",
+      message: "Permission dihapus"
+    });
+  } catch (err) {
+    console.error("[ERROR] DELETE /drive/permission:", err.message);
     res.status(500).json({ status: "error", error: err.message });
   }
 });
