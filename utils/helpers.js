@@ -1,9 +1,9 @@
-const { drive, DRIVE_MODE, SHARED_FOLDER_ID } = require('../config/google');
+const { drive, DRIVE_MODE, SHARED_FOLDER_ID, DETECT_ALL_SHARED } = require('../config/google');
 
 const ROOT_FOLDER_NAME = "Blockchain";
 
 // Helper list files dengan support shared drive
-async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared, ownedByMe, driveId)') {
+async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared, ownedByMe, driveId, createdTime, modifiedTime)') {
   if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
 
   const params = {
@@ -23,9 +23,54 @@ async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared,
   return res.data.files;
 }
 
+// Detect SEMUA folder yang di-share ke service account
+async function detectAllSharedFolders() {
+  if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
+
+  console.log("[INFO] Mendeteksi semua folder yang di-share...");
+
+  // Query: folder yang di-share (sharedWithMe) dan bukan trash
+  const sharedFolders = await listFiles(
+    `sharedWithMe = true and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    'files(id, name, mimeType, parents, shared, ownedByMe, driveId, createdTime, modifiedTime)'
+  );
+
+  // Query juga: folder yang dibuat oleh service account sendiri
+  const ownFolders = await listFiles(
+    `mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'me' in owners`,
+    'files(id, name, mimeType, parents, shared, ownedByMe, driveId, createdTime, modifiedTime)'
+  );
+
+  // Gabungkan dan hapus duplikat
+  const allFolders = [...sharedFolders, ...ownFolders];
+  const uniqueFolders = [];
+  const seenIds = new Set();
+
+  for (const folder of allFolders) {
+    if (!seenIds.has(folder.id)) {
+      seenIds.add(folder.id);
+      uniqueFolders.push({
+        ...folder,
+        type: 'folder',
+        source: folder.sharedWithMe ? 'shared' : 'owned',
+        children: []
+      });
+    }
+  }
+
+  console.log(`[INFO] Ditemukan ${uniqueFolders.length} folder (${sharedFolders.length} shared, ${ownFolders.length} owned)`);
+  return uniqueFolders;
+}
+
 // Cari atau buat root folder
 async function getOrCreateRootFolder() {
   if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
+
+  // Kalau DETECT_ALL_SHARED = true, return null (nanti handle di routes)
+  if (DETECT_ALL_SHARED) {
+    console.log("[INFO] Mode DETECT_ALL_SHARED aktif, skip root folder");
+    return null;
+  }
 
   // Kalau ada SHARED_FOLDER_ID, pakai itu langsung
   if (SHARED_FOLDER_ID) {
@@ -109,6 +154,7 @@ async function getStorageInfo() {
 
 module.exports = {
   listFiles,
+  detectAllSharedFolders,
   getOrCreateRootFolder,
   readAll,
   getStorageInfo,
