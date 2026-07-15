@@ -1,4 +1,4 @@
-const { drive } = require('../config/google');
+const { drive, DRIVE_MODE, SHARED_FOLDER_ID } = require('../config/google');
 
 const ROOT_FOLDER_NAME = "Blockchain";
 
@@ -6,14 +6,20 @@ const ROOT_FOLDER_NAME = "Blockchain";
 async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared, ownedByMe, driveId)') {
   if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
 
-  const res = await drive.files.list({
+  const params = {
     q,
     fields,
-    corpora: 'allDrives',
-    includeItemsFromAllDrives: true,
-    supportsAllDrives: true,
     pageSize: 1000,
-  });
+  };
+
+  // Kalau shared drive, tambah parameter shared drive
+  if (DRIVE_MODE === 'shared') {
+    params.corpora = 'allDrives';
+    params.includeItemsFromAllDrives = true;
+    params.supportsAllDrives = true;
+  }
+
+  const res = await drive.files.list(params);
   return res.data.files;
 }
 
@@ -21,17 +27,33 @@ async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared,
 async function getOrCreateRootFolder() {
   if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
 
+  // Kalau ada SHARED_FOLDER_ID, pakai itu langsung
+  if (SHARED_FOLDER_ID) {
+    console.log("[INFO] Menggunakan SHARED_FOLDER_ID:", SHARED_FOLDER_ID);
+    return SHARED_FOLDER_ID;
+  }
+
+  // Cari folder yang sudah ada
   const files = await listFiles(
     `name = '${ROOT_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
   );
 
   if (files.length > 0) return files[0].id;
 
-  const folder = await drive.files.create({
-    resource: { name: ROOT_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' },
+  // Buat folder baru
+  const folderData = {
+    resource: { 
+      name: ROOT_FOLDER_NAME, 
+      mimeType: 'application/vnd.google-apps.folder' 
+    },
     fields: 'id',
-    supportsAllDrives: true,
-  });
+  };
+
+  if (DRIVE_MODE === 'shared') {
+    folderData.supportsAllDrives = true;
+  }
+
+  const folder = await drive.files.create(folderData);
   return folder.data.id;
 }
 
@@ -49,13 +71,18 @@ async function readAll(folderId) {
     let content = null;
     if (file.mimeType.startsWith('text/') || file.mimeType === 'application/json') {
       try {
-        const fileContent = await drive.files.get({ 
+        const params = { 
           fileId: file.id, 
           alt: 'media',
-          supportsAllDrives: true,
-        });
+        };
+        if (DRIVE_MODE === 'shared') {
+          params.supportsAllDrives = true;
+        }
+        const fileContent = await drive.files.get(params);
         content = fileContent.data;
-      } catch (e) { content = "Cannot read"; }
+      } catch (e) { 
+        content = "Cannot read"; 
+      }
     }
     return { ...file, type: "file", content };
   }));
@@ -65,8 +92,19 @@ async function readAll(folderId) {
 async function getStorageInfo() {
   if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
 
-  const res = await drive.about.get({ fields: 'storageQuota' });
-  return res.data.storageQuota;
+  try {
+    const res = await drive.about.get({ fields: 'storageQuota' });
+    return res.data.storageQuota;
+  } catch (e) {
+    // Service account tidak punya storage quota
+    console.log("[INFO] Service account tidak punya storage quota, return default");
+    return { 
+      limit: null, 
+      usage: 0,
+      usageInDrive: 0,
+      usageInDriveTrash: 0
+    };
+  }
 }
 
 module.exports = {
