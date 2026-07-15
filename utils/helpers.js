@@ -12,54 +12,72 @@ async function listFiles(q, fields = 'files(id, name, mimeType, parents, shared,
     pageSize: 1000,
   };
 
-  // Kalau shared drive, tambah parameter shared drive
-  if (DRIVE_MODE === 'shared') {
-    params.corpora = 'allDrives';
-    params.includeItemsFromAllDrives = true;
-    params.supportsAllDrives = true;
-  }
+  // Selalu aktifkan allDrives untuk bisa baca shared folders
+  params.corpora = 'allDrives';
+  params.includeItemsFromAllDrives = true;
+  params.supportsAllDrives = true;
 
   const res = await drive.files.list(params);
-  return res.data.files;
+  return res.data.files || [];
 }
 
 // Detect SEMUA folder yang di-share ke service account
 async function detectAllSharedFolders() {
   if (!drive) throw new Error("Google Drive API tidak terinisialisasi");
 
-  console.log("[INFO] Mendeteksi semua folder yang di-share...");
+  console.log("[INFO] Mendeteksi semua folder...");
 
-  // Query: folder yang di-share (sharedWithMe) dan bukan trash
-  const sharedFolders = await listFiles(
-    `sharedWithMe = true and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-    'files(id, name, mimeType, parents, shared, ownedByMe, driveId, createdTime, modifiedTime)'
-  );
-
-  // Query juga: folder yang dibuat oleh service account sendiri
-  const ownFolders = await listFiles(
-    `mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'me' in owners`,
-    'files(id, name, mimeType, parents, shared, ownedByMe, driveId, createdTime, modifiedTime)'
-  );
-
-  // Gabungkan dan hapus duplikat
-  const allFolders = [...sharedFolders, ...ownFolders];
-  const uniqueFolders = [];
+  let allFolders = [];
   const seenIds = new Set();
 
-  for (const folder of allFolders) {
-    if (!seenIds.has(folder.id)) {
-      seenIds.add(folder.id);
-      uniqueFolders.push({
-        ...folder,
-        type: 'folder',
-        source: folder.sharedWithMe ? 'shared' : 'owned',
-        children: []
-      });
+  try {
+    // 1. Folder yang di-share ke service account (sharedWithMe)
+    const sharedFolders = await listFiles(
+      `sharedWithMe = true and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      'files(id, name, mimeType, parents, shared, ownedByMe, driveId, createdTime, modifiedTime)'
+    );
+    console.log(`[INFO] Shared folders: ${sharedFolders.length}`);
+
+    for (const folder of sharedFolders) {
+      if (!seenIds.has(folder.id)) {
+        seenIds.add(folder.id);
+        allFolders.push({
+          ...folder,
+          type: 'folder',
+          source: 'shared',
+          children: []
+        });
+      }
     }
+  } catch (e) {
+    console.log("[WARN] Gagal fetch shared folders:", e.message);
   }
 
-  console.log(`[INFO] Ditemukan ${uniqueFolders.length} folder (${sharedFolders.length} shared, ${ownFolders.length} owned)`);
-  return uniqueFolders;
+  try {
+    // 2. Folder yang dibuat oleh service account sendiri
+    const ownFolders = await listFiles(
+      `mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      'files(id, name, mimeType, parents, shared, ownedByMe, driveId, createdTime, modifiedTime)'
+    );
+    console.log(`[INFO] Own folders: ${ownFolders.length}`);
+
+    for (const folder of ownFolders) {
+      if (!seenIds.has(folder.id)) {
+        seenIds.add(folder.id);
+        allFolders.push({
+          ...folder,
+          type: 'folder',
+          source: folder.ownedByMe ? 'owned' : 'shared',
+          children: []
+        });
+      }
+    }
+  } catch (e) {
+    console.log("[WARN] Gagal fetch own folders:", e.message);
+  }
+
+  console.log(`[INFO] Total unique folders: ${allFolders.length}`);
+  return allFolders;
 }
 
 // Cari atau buat root folder
@@ -85,18 +103,17 @@ async function getOrCreateRootFolder() {
 
   if (files.length > 0) return files[0].id;
 
-  // Buat folder baru
+  // Buat folder baru (tapi service account tidak punya storage quota)
+  // Jadi ini akan error kalau tidak ada shared drive
+  console.log("[WARN] Membuat folder baru, mungkin error karena service account tanpa storage");
   const folderData = {
     resource: { 
       name: ROOT_FOLDER_NAME, 
       mimeType: 'application/vnd.google-apps.folder' 
     },
     fields: 'id',
+    supportsAllDrives: true,
   };
-
-  if (DRIVE_MODE === 'shared') {
-    folderData.supportsAllDrives = true;
-  }
 
   const folder = await drive.files.create(folderData);
   return folder.data.id;
@@ -119,10 +136,8 @@ async function readAll(folderId) {
         const params = { 
           fileId: file.id, 
           alt: 'media',
+          supportsAllDrives: true,
         };
-        if (DRIVE_MODE === 'shared') {
-          params.supportsAllDrives = true;
-        }
         const fileContent = await drive.files.get(params);
         content = fileContent.data;
       } catch (e) { 
@@ -141,7 +156,6 @@ async function getStorageInfo() {
     const res = await drive.about.get({ fields: 'storageQuota' });
     return res.data.storageQuota;
   } catch (e) {
-    // Service account tidak punya storage quota
     console.log("[INFO] Service account tidak punya storage quota, return default");
     return { 
       limit: null, 
