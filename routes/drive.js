@@ -1,11 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { drive } = require('../config/google');
+const { drive, DRIVE_MODE, SHARED_FOLDER_ID } = require('../config/google');
 const { getOrCreateRootFolder, readAll, getStorageInfo, listFiles } = require('../utils/helpers');
 
 // ─── JSON-RPC POST ───
 router.post('/', async (req, res) => {
-  // Check if drive is initialized
   if (!drive) {
     return res.status(500).json({ 
       jsonrpc: "2.0", 
@@ -35,20 +34,26 @@ router.post('/', async (req, res) => {
         break;
 
       case "create":
-        const file = await drive.files.create({
+        const createData = {
           resource: { name: params.name, parents: [rootId] },
           media: { body: params.content || '' },
           fields: 'id, name',
-          supportsAllDrives: true,
-        });
+        };
+        if (DRIVE_MODE === 'shared') {
+          createData.supportsAllDrives = true;
+        }
+        const file = await drive.files.create(createData);
         result = { id: file.data.id, name: file.data.name };
         break;
 
       case "delete":
-        await drive.files.delete({ 
+        const deleteData = { 
           fileId: params.id,
-          supportsAllDrives: true,
-        });
+        };
+        if (DRIVE_MODE === 'shared') {
+          deleteData.supportsAllDrives = true;
+        }
+        await drive.files.delete(deleteData);
         result = { success: true };
         break;
 
@@ -64,7 +69,6 @@ router.post('/', async (req, res) => {
 
 // ─── GET: Baca struktur folder ───
 router.get('/', async (req, res) => {
-  // Check if drive is initialized
   if (!drive) {
     return res.status(500).json({ 
       status: "error",
@@ -85,6 +89,8 @@ router.get('/', async (req, res) => {
       status: "success",
       rootFolder: "Blockchain",
       rootId: rootId,
+      drive_mode: DRIVE_MODE,
+      shared_folder_id: SHARED_FOLDER_ID,
       storage: {
         total_gb: storage.limit ? (storage.limit / 1024 / 1024 / 1024).toFixed(2) : 'Unlimited',
         used_gb: (storage.usage / 1024 / 1024 / 1024).toFixed(2)
