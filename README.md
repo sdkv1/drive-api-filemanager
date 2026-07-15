@@ -4,14 +4,22 @@ File Manager dengan Google Drive API + Express + Frontend HTML/CSS/JS
 
 ## ⚠️ Penting: Service Account & Storage
 
-Service Account (akun robot Google) **tidak punya storage quota** sendiri. Ada 2 cara:
+Service Account (akun robot Google) **tidak punya storage quota** sendiri. Ada 3 cara:
 
-### Cara 1: Shared Drive (Google Workspace) ⭐
+### Cara 1: Detect All Shared Folders ⭐ (Baru)
+Aktifkan `DETECT_ALL_SHARED=true` untuk otomatis mendeteksi SEMUA folder yang di-share ke Service Account dan folder milik Service Account sendiri.
+
+**Setup:**
+1. Set `DETECT_ALL_SHARED=true` di Vercel
+2. Share folder dari Google Drive pribadi ke email Service Account
+3. Folder akan otomatis muncul di UI
+
+### Cara 2: Shared Drive (Google Workspace)
 1. Buat **Shared Drive** di Google Drive
 2. Share ke email Service Account (Editor)
 3. Set `DRIVE_MODE=shared` di Vercel
 
-### Cara 2: Personal Folder (Lebih Mudah)
+### Cara 3: Personal Folder (Hardcode ID)
 1. Buat folder di Google Drive pribadi
 2. Share folder ke email Service Account (Editor)
 3. Copy **Folder ID** dari URL
@@ -26,11 +34,12 @@ Service Account (akun robot Google) **tidak punya storage quota** sendiri. Ada 2
 
 ### 2. Set Environment Variables
 
-| Variable | Required | Keterangan |
-|----------|----------|------------|
-| `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | ✅ | Base64 encoded service account JSON |
-| `DRIVE_MODE` | ❌ | `personal` (default) atau `shared` |
-| `SHARED_FOLDER_ID` | ❌ | Folder ID dari Google Drive (kalau personal mode) |
+| Variable | Required | Default | Keterangan |
+|----------|----------|---------|------------|
+| `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | ✅ | - | Base64 encoded service account JSON |
+| `DETECT_ALL_SHARED` | ❌ | `false` | `true` untuk detect semua folder shared |
+| `DRIVE_MODE` | ❌ | `personal` | `personal` atau `shared` |
+| `SHARED_FOLDER_ID` | ❌ | - | Folder ID (kalau personal mode) |
 
 Cara generate base64:
 ```bash
@@ -54,7 +63,8 @@ Klik "Deploy" dan tunggu build selesai.
 | GET | `/api/test` | Test env var |
 | GET | `/drive` | List struktur folder & storage |
 | POST | `/drive` | JSON-RPC (list, create, delete) |
-| GET | `/drive/shared` | List shared folders |
+| GET | `/drive/shared` | List shared items |
+| GET | `/drive/all-folders` | Detect SEMUA folder (owned + shared) |
 
 ## JSON-RPC Methods
 
