@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { drive, DRIVE_MODE, SHARED_FOLDER_ID } = require('../config/google');
-const { getOrCreateRootFolder, readAll, getStorageInfo, listFiles } = require('../utils/helpers');
+const { drive, DRIVE_MODE, SHARED_FOLDER_ID, DETECT_ALL_SHARED } = require('../config/google');
+const { getOrCreateRootFolder, detectAllSharedFolders, readAll, getStorageInfo, listFiles } = require('../utils/helpers');
 
 // ─── JSON-RPC POST ───
 router.post('/', async (req, res) => {
@@ -24,18 +24,32 @@ router.post('/', async (req, res) => {
 
     switch (method) {
       case "list":
-        const files = await listFiles(`'${rootId}' in parents and trashed = false`);
-        result = files.map(f => ({
-          id: f.id,
-          name: f.name,
-          mimeType: f.mimeType,
-          type: f.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file'
-        }));
+        // Kalau DETECT_ALL_SHARED, list semua folder yang di-share
+        if (DETECT_ALL_SHARED) {
+          const allFolders = await detectAllSharedFolders();
+          result = allFolders.map(f => ({
+            id: f.id,
+            name: f.name,
+            mimeType: f.mimeType,
+            type: 'folder',
+            source: f.source,
+            createdTime: f.createdTime,
+            modifiedTime: f.modifiedTime
+          }));
+        } else {
+          const files = await listFiles(`'${rootId}' in parents and trashed = false`);
+          result = files.map(f => ({
+            id: f.id,
+            name: f.name,
+            mimeType: f.mimeType,
+            type: f.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file'
+          }));
+        }
         break;
 
       case "create":
         const createData = {
-          resource: { name: params.name, parents: [rootId] },
+          resource: { name: params.name, parents: [rootId || params.parentId] },
           media: { body: params.content || '' },
           fields: 'id, name',
         };
@@ -81,6 +95,26 @@ router.get('/', async (req, res) => {
   }
 
   try {
+    // Kalau DETECT_ALL_SHARED, tampilkan semua folder yang di-share
+    if (DETECT_ALL_SHARED) {
+      const allFolders = await detectAllSharedFolders();
+      const storage = await getStorageInfo();
+
+      res.json({
+        status: "success",
+        mode: "detect_all_shared",
+        drive_mode: DRIVE_MODE,
+        detect_all_shared: DETECT_ALL_SHARED,
+        total_folders: allFolders.length,
+        storage: {
+          total_gb: storage.limit ? (storage.limit / 1024 / 1024 / 1024).toFixed(2) : 'Unlimited',
+          used_gb: (storage.usage / 1024 / 1024 / 1024).toFixed(2)
+        },
+        data: allFolders
+      });
+      return;
+    }
+
     const rootId = await getOrCreateRootFolder();
     const storage = await getStorageInfo();
     const data = await readAll(rootId);
@@ -91,6 +125,7 @@ router.get('/', async (req, res) => {
       rootId: rootId,
       drive_mode: DRIVE_MODE,
       shared_folder_id: SHARED_FOLDER_ID,
+      detect_all_shared: DETECT_ALL_SHARED,
       storage: {
         total_gb: storage.limit ? (storage.limit / 1024 / 1024 / 1024).toFixed(2) : 'Unlimited',
         used_gb: (storage.usage / 1024 / 1024 / 1024).toFixed(2)
@@ -116,7 +151,51 @@ router.get('/shared', async (req, res) => {
     const shared = await listFiles(`sharedWithMe = true and trashed = false`);
     res.json({
       status: "success",
-      sharedFolders: shared.filter(f => f.mimeType === 'application/vnd.google-apps.folder')
+      total: shared.length,
+      sharedFolders: shared.filter(f => f.mimeType === 'application/vnd.google-apps.folder').map(f => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        parents: f.parents,
+        shared: f.shared,
+        ownedByMe: f.ownedByMe,
+        driveId: f.driveId
+      })),
+      sharedFiles: shared.filter(f => f.mimeType !== 'application/vnd.google-apps.folder').map(f => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ status: "error", error: err.message });
+  }
+});
+
+// ─── GET: Detect all folders (owned + shared) ───
+router.get('/all-folders', async (req, res) => {
+  if (!drive) {
+    return res.status(500).json({ 
+      status: "error", 
+      message: "Google Drive API tidak terinisialisasi." 
+    });
+  }
+
+  try {
+    const allFolders = await detectAllSharedFolders();
+    res.json({
+      status: "success",
+      total: allFolders.length,
+      folders: allFolders.map(f => ({
+        id: f.id,
+        name: f.name,
+        source: f.source,
+        shared: f.shared,
+        ownedByMe: f.ownedByMe,
+        driveId: f.driveId,
+        createdTime: f.createdTime,
+        modifiedTime: f.modifiedTime
+      }))
     });
   } catch (err) {
     res.status(500).json({ status: "error", error: err.message });
